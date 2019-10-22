@@ -6,9 +6,32 @@
 
     <groupId>io.github.firatgursoy</groupId>
     <artifactId>fluentquery</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>0.0.1</version>
+    <name>FluentQuery</name>
+    <description>FluentQuery is a sql query builder by using java 8 functional interfaces and spring's JdbcTemplate.</description>
+    <licenses>
+        <license>
+            <name>Apache License 2.0</name>
+            <url>
+                https://raw.githubusercontent.com/firatgursoy/fluentquery/master/LICENSE
+            </url>
+        </license>
+    </licenses>
+    <developers>
+        <developer>
+            <name>Fırat Gürsoy</name>
+            <organization>firatgursoy</organization>
+            <organizationUrl>https://github.com/firatgursoy</organizationUrl>
+        </developer>
+    </developers>
+    <scm>
+        <connection>scm:git:git@github.com:firatgursoy/fluentquery.git</connection>
+        <developerConnection>scm:git:git@github.com:firatgursoy/fluentquery.git</developerConnection>
+        <url>http://ghttps://github.com/firatgursoy/fluentquery</url>
+    </scm>
     <properties>
         <spring.version>5.1.9.RELEASE</spring.version>
+        <project.encoding>UTF-8</project.encoding>
     </properties>
     <distributionManagement>
         <snapshotRepository>
@@ -38,8 +61,23 @@
                 <configuration>
                     <serverId>ossrh</serverId>
                     <nexusUrl>https://oss.sonatype.org/</nexusUrl>
-                    <autoReleaseAfterClose>true</autoReleaseAfterClose>
+                    <autoReleaseAfterClose>false</autoReleaseAfterClose>
+                    <sslInsecure>true</sslInsecure>
+                    <sslAllowAll>true</sslAllowAll>
                 </configuration>
+                <dependencies>
+                    <!-- https://mvnrepository.com/artifact/org.apache.httpcomponents/httpcore -->
+                    <dependency>
+                        <groupId>org.apache.httpcomponents</groupId>
+                        <artifactId>httpcore</artifactId>
+                        <version>4.4.6</version>
+                    </dependency>
+                    <dependency>
+                        <groupId>com.sun.jersey</groupId>
+                        <artifactId>jersey-client</artifactId>
+                        <version>1.17.1</version>
+                    </dependency>
+                </dependencies>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -82,14 +120,22 @@
                 </executions>
             </plugin>
             <plugin>
-                <groupId>org.sonatype.plugins</groupId>
-                <artifactId>nexus-staging-maven-plugin</artifactId>
-                <version>1.6.7</version>
-                <extensions>true</extensions>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-release-plugin</artifactId>
+                <version>2.5.3</version>
                 <configuration>
-                    <serverId>ossrh</serverId>
-                    <nexusUrl>https://oss.sonatype.org/</nexusUrl>
-                    <autoReleaseAfterClose>true</autoReleaseAfterClose>
+                    <autoVersionSubmodules>true</autoVersionSubmodules>
+                    <useReleaseProfile>false</useReleaseProfile>
+                    <releaseProfiles>release</releaseProfiles>
+                    <goals>deploy</goals>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <version>2.4</version>
+                <configuration>
+                    <encoding>${project.encoding}</encoding>
                 </configuration>
             </plugin>
         </plugins>
