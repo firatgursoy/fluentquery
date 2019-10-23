@@ -1,5 +1,5 @@
 # fluentquery
-FluentQuery is a sql query builder by using java 8 functional interfaces and spring's JdbcTemplate.
+FluentQuery is a flexible SQL query builder which utilizes JAVA 8 Functional Interfaces and Spring's JdbcTemplate.
 
  Main use-case is complex conditional query building situations.
  Benefits are high code readability, easy validation and easy to integrate sql to java code.
