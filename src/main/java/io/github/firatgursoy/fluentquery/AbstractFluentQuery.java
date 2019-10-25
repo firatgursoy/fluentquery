@@ -94,8 +94,7 @@ public abstract class AbstractFluentQuery implements FluentQuery {
 
     @Override
     public FluentQuery param(String key, Object value) {
-        this.params.addValue(key, value);
-        return this;
+        return param(key, value, defaultValidationStrategy);
     }
 
     @Override
