@@ -5,6 +5,7 @@ import org.springframework.jdbc.core.BeanPropertyRowMapper;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
+import javax.sql.DataSource;
 import java.util.List;
 import java.util.Optional;
 
@@ -22,8 +23,12 @@ public class JdbcTemplateFluentQuery extends AbstractFluentQuery {
     private JdbcTemplateFluentQuery() {
     }
 
-    JdbcTemplateFluentQuery(NamedParameterJdbcTemplate jdbcTemplate) {
+    public JdbcTemplateFluentQuery(NamedParameterJdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
+    }
+
+    public JdbcTemplateFluentQuery(DataSource dataSource) {
+        this.jdbcTemplate = new NamedParameterJdbcTemplate(dataSource);
     }
 
     private <T> List<T> list(RowMapper<T> rowMapper) {
