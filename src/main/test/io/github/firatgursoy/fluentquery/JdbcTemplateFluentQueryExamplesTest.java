@@ -11,6 +11,6 @@ public class JdbcTemplateFluentQueryExamplesTest {
     @Test
     public void exceptIllegalArgumentExceptionOnNullNamedParameterJdbcTemplateConstructor() {
         NamedParameterJdbcTemplate jdbcTemplate = null;
-        Assertions.assertThrows(IllegalArgumentException.class, () -> new JdbcTemplateFluentQuery(jdbcTemplate, new DefaultValidationRegistry()));
+        Assertions.assertThrows(IllegalArgumentException.class, () -> new JdbcTemplateFluentQuery(jdbcTemplate, new FluentQuerySettingsHolder()));
     }
 }

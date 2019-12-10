@@ -48,6 +48,7 @@ public abstract class OneToManyResultSetExtractor<R, C, K> implements ResultSetE
     protected final ExpectedResults expectedResults;
     protected final RowMapper<R> rootMapper;
     protected final RowMapper<C> childMapper;
+
     /**
      * Creates a new {@link OneToManyResultSetExtractor} from the given {@link RowMapper}s.
      *
@@ -87,6 +88,7 @@ public abstract class OneToManyResultSetExtractor<R, C, K> implements ResultSetE
             K primaryKey = mapPrimaryKey(rs);
             if (mapForeignKey(rs) != null) {
                 while (more && primaryKey.equals(mapForeignKey(rs))) {
+
                     addChild(root, childMapper.mapRow(rs, row));
                     more = rs.next();
                     if (more) {

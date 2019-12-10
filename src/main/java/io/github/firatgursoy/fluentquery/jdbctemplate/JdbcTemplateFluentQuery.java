@@ -1,9 +1,7 @@
 package io.github.firatgursoy.fluentquery.jdbctemplate;
 
 import io.github.firatgursoy.fluentquery.AbstractFluentQuery;
-import io.github.firatgursoy.fluentquery.validation.ValidationRegistry;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import io.github.firatgursoy.fluentquery.FluentQuerySettingsHolder;
 import org.springframework.jdbc.core.BeanPropertyRowMapper;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.BeanPropertySqlParameterSource;
@@ -26,12 +24,10 @@ import java.util.function.BiConsumer;
  */
 public class JdbcTemplateFluentQuery extends AbstractFluentQuery {
 
-    protected final Log logger = LogFactory.getLog(getClass());
     private NamedParameterJdbcTemplate jdbcTemplate;
 
-
-    public JdbcTemplateFluentQuery(NamedParameterJdbcTemplate jdbcTemplate, ValidationRegistry validationRegistry) {
-        super(validationRegistry);
+    public JdbcTemplateFluentQuery(NamedParameterJdbcTemplate jdbcTemplate, FluentQuerySettingsHolder settingsHolder) {
+        super(settingsHolder);
         if (jdbcTemplate == null) {
             throw new IllegalArgumentException("JdbcTemplate must not be null");
         }
@@ -107,7 +103,7 @@ public class JdbcTemplateFluentQuery extends AbstractFluentQuery {
             if (parameterNames != null) {
                 parameterNames = Arrays.stream(parameterNames).filter(param -> !param.equalsIgnoreCase("class")).toArray(String[]::new);
                 for (String parameterName : parameterNames) {
-                    params.addValue(defaultValidationStrategy, parameterName, beanPropertySqlParameterSource.getValue(parameterName));
+                    params.addValue(settingsHolder().getDefaultValidationStrategy(), parameterName, beanPropertySqlParameterSource.getValue(parameterName));
                 }
             }
         }
