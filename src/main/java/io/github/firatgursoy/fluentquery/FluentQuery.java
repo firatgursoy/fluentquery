@@ -1,9 +1,10 @@
 package io.github.firatgursoy.fluentquery;
 
+import io.github.firatgursoy.fluentquery.validation.ValidationStrategy;
+
 import java.util.List;
 import java.util.Optional;
 import java.util.function.BiConsumer;
-import java.util.function.Function;
 
 /**
  * FluentQuery is a sql query builder by using java 8 functional interfaces and spring's JdbcTemplate.
@@ -16,29 +17,25 @@ public interface FluentQuery {
 
     FluentQuery append(String sqlPart);
 
-    FluentQuery append(String sqlPart, ValidationStrategy condition);
-
     FluentQuery append(String sqlPart, String paramKey, Object paramValue);
 
-    FluentQuery append(String sqlPart, String paramKey, Object paramValue, ValidationStrategy validationStrategy);
+    FluentQuery append(String sqlPart, String paramKey, Object paramValue, Class<? extends ValidationStrategy<?, Boolean>> validationStrategy);
 
-    FluentQuery append(String sqlPart, Function<ParameterMap, ParameterMap> params, ValidationStrategy validationStrategy);
-
-    FluentQuery append(String sqlPart, Function<ParameterMap, ParameterMap> params);
+    FluentQuery append(String sqlPart, ParameterMapConsumer<ParameterMap> params);
 
     FluentQuery param(String key, Object value);
 
-    FluentQuery param(String key, Object value, ValidationStrategy validationStrategy);
+    FluentQuery param(String key, Object value, Class<? extends ValidationStrategy<?, Boolean>> validationStrategy);
 
     FluentQuery param(Object beanPropertySource);
 
     FluentQuery compose(FluentQuery query);
 
-    FluentQuery defaultValidationStrategy(ValidationStrategy defaultValidationStrategy);
-
-    FluentQuery separatorStrategy(SeparatorStrategy separatorStrategy);
+    FluentQuerySettingsHolder settingsHolder();
 
     <T> List<T> list(Class<T> mappedClass);
+
+    List<Object[]> listAsTuple();
 
     <T> Optional<T> getOptional(Class<T> mappedClass);
 

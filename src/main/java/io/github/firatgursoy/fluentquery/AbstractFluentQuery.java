@@ -1,23 +1,31 @@
 package io.github.firatgursoy.fluentquery;
 
-import io.github.firatgursoy.fluentquery.validation.ValidationRegistry;
+import io.github.firatgursoy.fluentquery.annotation.Validate;
+import io.github.firatgursoy.fluentquery.validation.ValidationStrategy;
+import io.github.firatgursoy.fluentquery.validation.validations.NotNullValidationStrategy;
+import org.springframework.beans.BeanWrapper;
+import org.springframework.beans.PropertyAccessorFactory;
+import org.springframework.core.convert.TypeDescriptor;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.function.BiConsumer;
-import java.util.function.Function;
 
 public abstract class AbstractFluentQuery implements FluentQuery {
 
     protected ParameterMap params = new ParameterMapImpl();
     protected List<Object> beanPropertyParameterObjs = new ArrayList<>();
-    protected ValidationStrategy defaultValidationStrategy = ValidationStrategy.none();
+
     private List<PreparingQuery> preparingQueries = new LinkedList<>();
-    private SeparatorStrategy separatorStrategy = SeparatorStrategy.eolLinux();
 
-    private ValidationRegistry validationRegistry;
+    private FluentQuerySettingsHolder settingsHolder;
 
-    public AbstractFluentQuery(ValidationRegistry validationRegistry) {
-        this.validationRegistry = validationRegistry;
+    public AbstractFluentQuery(FluentQuerySettingsHolder settingsHolder) {
+        this.settingsHolder = settingsHolder;
     }
 
     protected Map.Entry<String, Map<String, Object>> prepare() {
@@ -25,17 +33,45 @@ public abstract class AbstractFluentQuery implements FluentQuery {
         StringBuilder sql = new StringBuilder();
         StringBuilder messages = new StringBuilder();
         for (PreparingQuery preparingQuery : preparingQueries) {
+            boolean notRequiredValidationProblem = false;
             for (PreparingQuery.ParamConditionPair paramConditionPair : preparingQuery.paramConditionPairs) {
                 Object value = params.getValue(paramConditionPair.paramKey);
-                ValidationStrategy<Object, Boolean> validationStrategy = paramConditionPair.validationStrategy;
-                if (validationStrategy.isAuto()) {
-                    validationStrategy = validationRegistry.getValidationStrategy(value.getClass());
+                Class<? extends ValidationStrategy<?, Boolean>> validationStrategyClazz = paramConditionPair.validationStrategy;
+                if (params.getValidationStrategy(paramConditionPair.paramKey) != null) {
+                    validationStrategyClazz = params.getValidationStrategy(paramConditionPair.paramKey);
                 }
-                if (!validationStrategy.apply(value)) {
-                    messages.append(paramConditionPair.paramKey + "'s value must be valid. [Value = " + value + "], [ValidationStrategy = " + validationStrategy + "]\n");
+                if (validationStrategyClazz == null) {
+                    validationStrategyClazz = settingsHolder().getDefaultValidationStrategy();
+                }
+                ValidationStrategy<Object, Boolean> validationStrategy = (ValidationStrategy<Object, Boolean>) ValidationUtil.instantiateClass(validationStrategyClazz);
+                if (validationStrategy.isAuto()) {
+                    if (value == null) {
+                        validationStrategy = ValidationUtil.instantiateClass(NotNullValidationStrategy.class);
+                    } else {
+                        validationStrategy = (ValidationStrategy<Object, Boolean>) ValidationUtil.instantiateClass(settingsHolder.getValidationRegistry().getValidationStrategy(value.getClass()));
+                    }
+                }
+                if (params.getValidationStrategy(paramConditionPair.paramKey) != null && !validationStrategy.apply(value)) {
+                    for (Object beanPropertyParameterObj : beanPropertyParameterObjs) {
+                        BeanWrapper bw = PropertyAccessorFactory.forBeanPropertyAccess(beanPropertyParameterObj);
+                        TypeDescriptor propertyTypeDescriptor = bw.getPropertyTypeDescriptor(paramConditionPair.paramKey);
+                        if (propertyTypeDescriptor.hasAnnotation(Validate.class)) {
+                            Validate annotation = propertyTypeDescriptor.getAnnotation(Validate.class);
+                            if (annotation.optional()) {
+                                notRequiredValidationProblem = true;
+                            } else {
+                                messages.append(paramConditionPair.paramKey + "'s value must be valid. [Value = " + value + "], [ValidationStrategy = " + validationStrategy + "]\n");
+                            }
+                        }
+                    }
+
+                } else if (params.getValidationStrategy(paramConditionPair.paramKey) == null && !validationStrategy.apply(value)) {
+                    notRequiredValidationProblem = true;
                 }
             }
-            sql.append(separatorStrategy.apply(preparingQuery.sqlPart));
+            if (!notRequiredValidationProblem) {
+                sql.append(ValidationUtil.instantiateClass(settingsHolder.getDefaultSeparatorStrategy()).apply(preparingQuery.sqlPart));
+            }
         }
         if (!messages.toString().isEmpty()) {
             throw new RuntimeException(messages.toString());
@@ -44,19 +80,11 @@ public abstract class AbstractFluentQuery implements FluentQuery {
     }
 
     @Override
-    public FluentQuery defaultValidationStrategy(ValidationStrategy validationStrategy) {
-        this.defaultValidationStrategy = validationStrategy;
-        return this;
+    public FluentQuerySettingsHolder settingsHolder() {
+        return this.settingsHolder;
     }
 
-    @Override
-    public FluentQuery separatorStrategy(SeparatorStrategy separatorStrategy) {
-        this.separatorStrategy = separatorStrategy;
-        return this;
-    }
-
-    @Override
-    public FluentQuery append(String sqlPart, Function<ParameterMap, ParameterMap> params, ValidationStrategy validationStrategy) {
+    private FluentQuery append(String sqlPart, ParameterMapConsumer<ParameterMap> params, Class<? extends ValidationStrategy<?, Boolean>> validationStrategy) {
         List<String> strings = ValidationUtil.extractParameterKeys(sqlPart);
         List<PreparingQuery.ParamConditionPair> pairs = new LinkedList<>();
         for (String key : strings) {
@@ -64,39 +92,35 @@ public abstract class AbstractFluentQuery implements FluentQuery {
         }
         preparingQueries.add(new PreparingQuery(sqlPart, pairs));
         if (params != null) {
-            this.params = params.apply(this.params);
+            params.accept(this.params);
         }
         return this;
     }
 
     @Override
     public FluentQuery append(String sqlPart) {
-        return append(sqlPart, (params) -> params, defaultValidationStrategy);
-    }
-
-    @Override
-    public FluentQuery append(String sqlPart, ValidationStrategy validationStrategy) {
-        return append(sqlPart, (params) -> params, validationStrategy);
+        return append(sqlPart, parameterMap -> {
+        }, null);
     }
 
     @Override
     public FluentQuery append(String sqlPart, String paramKey, Object paramValue) {
-        return append(sqlPart, paramKey, paramValue, defaultValidationStrategy);
+        return append(sqlPart, paramKey, paramValue, settingsHolder.getDefaultValidationStrategy());
     }
 
     @Override
-    public FluentQuery append(String sqlPart, String paramKey, Object paramValue, ValidationStrategy validationStrategy) {
-        return append(sqlPart, (params) -> params.addValue(ValidationStrategy.none(), paramKey, paramValue), validationStrategy);
+    public FluentQuery append(String sqlPart, String paramKey, Object paramValue, Class<? extends ValidationStrategy<?, Boolean>> validationStrategy) {
+        return append(sqlPart, (params) -> params.addValue(null, paramKey, paramValue), validationStrategy);
     }
 
     @Override
-    public FluentQuery append(String sqlPart, Function<ParameterMap, ParameterMap> params) {
-        return append(sqlPart, params, defaultValidationStrategy);
+    public FluentQuery append(String sqlPart, ParameterMapConsumer<ParameterMap> params) {
+        return append(sqlPart, params, settingsHolder.getDefaultValidationStrategy());
     }
 
     @Override
     public FluentQuery param(String key, Object value) {
-        return param(key, value, defaultValidationStrategy);
+        return param(key, value, settingsHolder.getDefaultValidationStrategy());
     }
 
     @Override
@@ -106,7 +130,7 @@ public abstract class AbstractFluentQuery implements FluentQuery {
     }
 
     @Override
-    public FluentQuery param(String key, Object value, ValidationStrategy validationStrategy) {
+    public FluentQuery param(String key, Object value, Class<? extends ValidationStrategy<?, Boolean>> validationStrategy) {
         this.params.addValue(validationStrategy, key, value);
         return this;
     }
@@ -122,6 +146,8 @@ public abstract class AbstractFluentQuery implements FluentQuery {
         this.preparingQueries.addAll(((AbstractFluentQuery) query).preparingQueries);
         return this;
     }
+
+    public abstract List<Object[]> listAsTuple();
 
     public abstract int update();
 
@@ -168,18 +194,18 @@ public abstract class AbstractFluentQuery implements FluentQuery {
 
         protected static class ParamConditionPair {
             private String paramKey;
-            private ValidationStrategy<Object, Boolean> validationStrategy = ValidationStrategy.none();
+            private Class<? extends ValidationStrategy<?, Boolean>> validationStrategy = null;
 
             protected ParamConditionPair() {
 
             }
 
-            ParamConditionPair(String paramKey, ValidationStrategy<Object, Boolean> validationStrategy) {
+            ParamConditionPair(String paramKey, Class<? extends ValidationStrategy<?, Boolean>> validationStrategy) {
                 this.paramKey = paramKey;
                 this.validationStrategy = validationStrategy;
             }
 
-            public ValidationStrategy<Object, Boolean> getValidationStrategy() {
+            public Class<? extends ValidationStrategy<?, Boolean>> getValidationStrategy() {
                 return validationStrategy;
             }
 

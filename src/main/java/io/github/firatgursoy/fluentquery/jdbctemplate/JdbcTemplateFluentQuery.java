@@ -1,9 +1,13 @@
 package io.github.firatgursoy.fluentquery.jdbctemplate;
 
 import io.github.firatgursoy.fluentquery.AbstractFluentQuery;
-import io.github.firatgursoy.fluentquery.validation.ValidationRegistry;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import io.github.firatgursoy.fluentquery.FluentQuerySettingsHolder;
+import io.github.firatgursoy.fluentquery.annotation.Validate;
+import io.github.firatgursoy.fluentquery.validation.ValidationStrategy;
+import io.github.firatgursoy.fluentquery.validation.Validations;
+import org.springframework.beans.BeanWrapper;
+import org.springframework.beans.PropertyAccessorFactory;
+import org.springframework.core.convert.TypeDescriptor;
 import org.springframework.jdbc.core.BeanPropertyRowMapper;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.BeanPropertySqlParameterSource;
@@ -11,11 +15,14 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiConsumer;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * FluentQuery is a sql query builder by using java 8 functional interfaces and spring's JdbcTemplate.
@@ -26,12 +33,10 @@ import java.util.function.BiConsumer;
  */
 public class JdbcTemplateFluentQuery extends AbstractFluentQuery {
 
-    protected final Log logger = LogFactory.getLog(getClass());
     private NamedParameterJdbcTemplate jdbcTemplate;
 
-
-    public JdbcTemplateFluentQuery(NamedParameterJdbcTemplate jdbcTemplate, ValidationRegistry validationRegistry) {
-        super(validationRegistry);
+    public JdbcTemplateFluentQuery(NamedParameterJdbcTemplate jdbcTemplate, FluentQuerySettingsHolder settingsHolder) {
+        super(settingsHolder);
         if (jdbcTemplate == null) {
             throw new IllegalArgumentException("JdbcTemplate must not be null");
         }
@@ -43,6 +48,17 @@ public class JdbcTemplateFluentQuery extends AbstractFluentQuery {
         return jdbcTemplate.query(validatedQuery.getKey(), validatedQuery.getValue(), rowMapper);
     }
 
+    @Override
+    public List<Object[]> listAsTuple() {
+        return list((rs, rowNum) -> {
+            List<Object> columns = new ArrayList<>();
+            for (int i = 1; i <= rs.getMetaData().getColumnCount(); i++) {
+                columns.add(rs.getObject(i));
+            }
+            return columns.toArray();
+        });
+    }
+    
     @Override
     public int update() {
         fetchBeanPropertyParameterSource();
@@ -102,12 +118,27 @@ public class JdbcTemplateFluentQuery extends AbstractFluentQuery {
     @Override
     public void fetchBeanPropertyParameterSource() {
         for (Object beanPropertyParameterObj : beanPropertyParameterObjs) {
+            BeanWrapper bw = PropertyAccessorFactory.forBeanPropertyAccess(beanPropertyParameterObj);
             BeanPropertySqlParameterSource beanPropertySqlParameterSource = new BeanPropertySqlParameterSource(beanPropertyParameterObj);
-            String[] parameterNames = beanPropertySqlParameterSource.getParameterNames();
+            String[] parameterNames = beanPropertySqlParameterSource.getReadablePropertyNames();
             if (parameterNames != null) {
                 parameterNames = Arrays.stream(parameterNames).filter(param -> !param.equalsIgnoreCase("class")).toArray(String[]::new);
                 for (String parameterName : parameterNames) {
-                    params.addValue(defaultValidationStrategy, parameterName, beanPropertySqlParameterSource.getValue(parameterName));
+                    TypeDescriptor propertyTypeDescriptor = bw.getPropertyTypeDescriptor(parameterName);
+                    Class<? extends ValidationStrategy<?, Boolean>> validationClass = settingsHolder().getDefaultValidationStrategy();
+                    if (propertyTypeDescriptor != null) {
+                        if (propertyTypeDescriptor.hasAnnotation(Validate.class)) {
+                            Validate annotation = propertyTypeDescriptor.getAnnotation(Validate.class);
+                            if (!annotation.optional()) {
+                                validationClass = annotation.using().getValidationClass();
+                            } else {
+                                validationClass = settingsHolder().getDefaultValidationStrategy();
+                            }
+                        } else {
+                            validationClass = Validations.NONE.getValidationClass();
+                        }
+                    }
+                    params.addValue(validationClass, parameterName, beanPropertySqlParameterSource.getValue(parameterName));
                 }
             }
         }

@@ -1,42 +1,37 @@
 package io.github.firatgursoy.fluentquery.validation;
 
-import io.github.firatgursoy.fluentquery.ValidationStrategy;
-
-import java.util.Collection;
-import java.util.Date;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.*;
 
 public class DefaultValidationRegistry implements ValidationRegistry {
 
-    private Map<Class, ValidationStrategy> validationStrategies = new LinkedHashMap<>();
+    private Map<Class, Class<? extends ValidationStrategy<?, Boolean>>> validationStrategies = new LinkedHashMap<>();
 
     public DefaultValidationRegistry() {
         addDefaultValidationStrategies();
     }
 
     void addDefaultValidationStrategies() {
-        addValidationStrategy(CharSequence.class, ValidationStrategy.notBlank());
-        addValidationStrategy(Date.class, ValidationStrategy.notNull());
-        addValidationStrategy(Number.class, ValidationStrategy.notZeroOrNull());
-        addValidationStrategy(Collection.class, ValidationStrategy.notEmpty());
-        addValidationStrategy(Boolean.class, ValidationStrategy.notNull());
+        addValidationStrategy(CharSequence.class, ValidationStrategy.NOT_BLANK);
+        addValidationStrategy(Number.class, ValidationStrategy.NOT_ZERO_OR_NULL);
+        addValidationStrategy(Collection.class, ValidationStrategy.NOT_EMPTY);
+        addValidationStrategy(Date.class, ValidationStrategy.NOT_NULL);
+        addValidationStrategy(Boolean.class, ValidationStrategy.NOT_NULL);
+    }
+
+
+    @Override
+    public <T> void addValidationStrategy(Class<T> clazz, Class<? extends ValidationStrategy<?, Boolean>> validationStrategy) {
+        validationStrategies.put(clazz, validationStrategy);
     }
 
     @Override
-    public <T> void addValidationStrategy(Class<T> clazz, ValidationStrategy validationStrategy) {
-        if (getValidationStrategy(clazz).equals(ValidationStrategy.none())) {
-            validationStrategies.put(clazz, validationStrategy);
-        }
-    }
+    public <T> Class<? extends ValidationStrategy<?, Boolean>> getValidationStrategy(Class<T> type) {
 
-    @Override
-    public <T> ValidationStrategy getValidationStrategy(Class<T> type) {
-        ValidationStrategy validationStrategy = validationStrategies.get(type);
-        if (validationStrategy == null) {
-            return ValidationStrategy.none();
+        Optional<Map.Entry<Class, Class<? extends ValidationStrategy<?, Boolean>>>> first = validationStrategies.entrySet().stream().filter(clazz -> clazz.getKey().isAssignableFrom(type)).findFirst();
+        if (first.isPresent()) {
+            return first.get().getValue();
         }
-        return validationStrategy;
+        return ValidationStrategy.NONE;
     }
 
 }

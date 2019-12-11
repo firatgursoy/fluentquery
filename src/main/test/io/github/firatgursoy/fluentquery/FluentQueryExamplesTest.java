@@ -4,6 +4,7 @@ import io.github.firatgursoy.fluentquery.dto.Invoice;
 import io.github.firatgursoy.fluentquery.dto.InvoiceDetail;
 import io.github.firatgursoy.fluentquery.dto.InvoiceSearchForm;
 import io.github.firatgursoy.fluentquery.jdbctemplate.JdbcTemplateFluentQueryFactoryImpl;
+import io.github.firatgursoy.fluentquery.validation.ValidationStrategy;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
@@ -13,7 +14,6 @@ import org.testcontainers.containers.MySQLContainer;
 
 import javax.sql.DataSource;
 import java.util.List;
-import java.util.function.Function;
 
 public abstract class FluentQueryExamplesTest {
 
@@ -35,21 +35,24 @@ public abstract class FluentQueryExamplesTest {
                 .driverClassName("com.mysql.cj.jdbc.Driver")
                 .build();
         factory = new JdbcTemplateFluentQueryFactoryImpl(dataSource);
+        factory.settingsHolder().setDefaultSeparatorStrategy(SeparatorStrategy.SYSTEM)
+                .setDefaultValidationStrategy(ValidationStrategy.AUTO);
+
         int integer = factory.newQuery().append("create table if not exists invoice (id int, code varchar(255), total_amount FLOAT(7,4));").update();
         int integer2 = factory.newQuery().append("create table if not exists invoice_detail (id int, invoice_id int, amount FLOAT(7,4), discount FLOAT(7,4));").update();
-        factory.newQuery().defaultValidationStrategy(ValidationStrategy.auto())
+        factory.newQuery()
                 .append("insert invoice (id, code,total_amount) values(1, :code, :totalAmount)",
-                        (Function<ParameterMap, ParameterMap>) parameterMap -> parameterMap.addValue("code", "abc").addValue("totalAmount", 750)
+                        parameterMap -> parameterMap.addValue("code", "abc").addValue(ValidationStrategy.NOT_ZERO_OR_NULL, "totalAmount", 750)
                 )
                 .update();
-        factory.newQuery().defaultValidationStrategy(ValidationStrategy.auto())
+        factory.newQuery()
                 .append("insert invoice_detail (id, invoice_id, amount, discount) values(1, 1, :amount, :discount)",
-                        (Function<ParameterMap, ParameterMap>) parameterMap -> parameterMap.addValue("amount", 250).addValue("discount", 221)
+                        parameterMap -> parameterMap.addValue("amount", 250).addValue("discount", 221)
                 )
                 .update();
-        factory.newQuery().defaultValidationStrategy(ValidationStrategy.auto())
+        factory.newQuery()
                 .append("insert invoice_detail (id, invoice_id, amount, discount) values(1, 1, :amount, :discount)",
-                        (Function<ParameterMap, ParameterMap>) parameterMap -> parameterMap.addValue("amount", 500).addValue("discount", 111)
+                        parameterMap -> parameterMap.addValue("amount", 500).addValue("discount", 111)
                 )
                 .update();
 
@@ -65,9 +68,7 @@ public abstract class FluentQueryExamplesTest {
     void example1() {
         FluentQuery fluentQuery = factory.newQuery()
                 .append("select * from invoice where 1=1")
-                .append("and code=:code", ValidationStrategy.notBlank())
-                .defaultValidationStrategy(ValidationStrategy.auto())
-                .separatorStrategy(SeparatorStrategy.system())
+                .append("and code=:code")
                 .param(new InvoiceSearchForm());
         List<Invoice> list = fluentQuery.list(Invoice.class);
         Assertions.assertEquals(1, list.size());
@@ -78,9 +79,31 @@ public abstract class FluentQueryExamplesTest {
         List<Invoice> list = factory.newQuery()
                 .append("select i.id as invoiceId, i.total_amount as totalAmount, i.code as invoiceCode, idd.amount as invoiceDetailAmount, idd.discount as invoiceDetailDiscount from invoice i")
                 .append("join invoice_detail idd on idd.invoice_id = i.id")
-                .append("and i.id=:id", "id", 1, ValidationStrategy.notZeroOrNull())
-                .defaultValidationStrategy(ValidationStrategy.auto())
-                .separatorStrategy(SeparatorStrategy.system())
+                .append("and i.id=:id", "id", 1, ValidationStrategy.NOT_NULL)
+                .param(new InvoiceSearchForm())
+                .listOneToMany(Invoice.class, InvoiceDetail.class, (invoice, invoiceDetail) -> invoice.getInvoiceDetails().add(invoiceDetail), "invoiceId");
+        Assertions.assertEquals(1, list.size());
+    }
+
+    @Test
+    void example3() {
+        List<Invoice> list = factory.newQuery()
+                .append("select i.id as invoiceId, i.total_amount as totalAmount, i.code as invoiceCode, idd.amount as invoiceDetailAmount, idd.discount as invoiceDetailDiscount from invoice i")
+                .append("join invoice_detail idd on idd.invoice_id = i.id")
+                .append("and i.id=:id", "id", 1, ValidationStrategy.NOT_NULL)
+                .append("and i.code=:code")
+                .param(new InvoiceSearchForm())
+                .listOneToMany(Invoice.class, InvoiceDetail.class, (invoice, invoiceDetail) -> invoice.getInvoiceDetails().add(invoiceDetail), "invoiceId");
+        Assertions.assertEquals(1, list.size());
+    }
+
+    @Test
+    void example4() {
+        List<Invoice> list = factory.newQuery()
+                .append("select i.id as invoiceId, i.total_amount as totalAmount, i.code as invoiceCode, idd.amount as invoiceDetailAmount, idd.discount as invoiceDetailDiscount from invoice i")
+                .append("join invoice_detail idd on idd.invoice_id = i.id")
+                .append("and i.id=:id", "id", 1, ValidationStrategy.NOT_NULL)
+                .append("and i.code=:code")
                 .param(new InvoiceSearchForm())
                 .listOneToMany(Invoice.class, InvoiceDetail.class, (invoice, invoiceDetail) -> invoice.getInvoiceDetails().add(invoiceDetail), "invoiceId");
         Assertions.assertEquals(1, list.size());
