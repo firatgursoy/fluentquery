@@ -9,6 +9,6 @@ public class NotEmptyValidationStrategy implements ValidationStrategy<Collection
 
     @Override
     public Boolean apply(Collection<?> objects) {
-        return ValidationUtil.isEmpty(objects);
+        return !ValidationUtil.isEmpty(objects);
     }
 }

@@ -1,7 +1,6 @@
 package io.github.firatgursoy.fluentquery;
 
 import io.github.firatgursoy.fluentquery.validation.ValidationStrategy;
-import io.github.firatgursoy.fluentquery.validation.validations.*;
 
 import java.util.List;
 import java.util.Optional;
@@ -35,6 +34,8 @@ public interface FluentQuery {
     FluentQuerySettingsHolder settingsHolder();
 
     <T> List<T> list(Class<T> mappedClass);
+
+    List<Object[]> listAsTuple();
 
     <T> Optional<T> getOptional(Class<T> mappedClass);
 

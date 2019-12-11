@@ -1,6 +1,7 @@
 package io.github.firatgursoy.fluentquery;
 
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -25,11 +26,11 @@ public class ValidationUtil {
         return coll == null || coll.isEmpty();
     }
 
-    public static boolean isNullOrZero(Comparable<Number> number) {
+    public static boolean isNullOrZero(Number number) {
         if (number == null) {
             return false;
         }
-        return number.compareTo(0) == 0;
+        return new BigDecimal(number.doubleValue()).compareTo(BigDecimal.ZERO) == 0;
     }
 
     protected static List<String> extractParameterKeys(String sqlPart) {

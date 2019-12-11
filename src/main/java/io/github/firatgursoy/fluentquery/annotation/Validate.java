@@ -10,9 +10,9 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 @Target(ElementType.FIELD)
-@Retention(RetentionPolicy.SOURCE)
+@Retention(RetentionPolicy.RUNTIME)
 public @interface Validate {
-    boolean mustBeValidated() default true;
+    boolean optional() default false;
 
     Validations using() default Validations.AUTO;
 }

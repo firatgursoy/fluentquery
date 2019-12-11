@@ -1,8 +1,18 @@
 package io.github.firatgursoy.fluentquery;
 
+import io.github.firatgursoy.fluentquery.annotation.Validate;
 import io.github.firatgursoy.fluentquery.validation.ValidationStrategy;
+import io.github.firatgursoy.fluentquery.validation.validations.NotNullValidationStrategy;
+import org.springframework.beans.BeanWrapper;
+import org.springframework.beans.PropertyAccessorFactory;
+import org.springframework.core.convert.TypeDescriptor;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.function.BiConsumer;
 
 public abstract class AbstractFluentQuery implements FluentQuery {
@@ -23,18 +33,45 @@ public abstract class AbstractFluentQuery implements FluentQuery {
         StringBuilder sql = new StringBuilder();
         StringBuilder messages = new StringBuilder();
         for (PreparingQuery preparingQuery : preparingQueries) {
+            boolean notRequiredValidationProblem = false;
             for (PreparingQuery.ParamConditionPair paramConditionPair : preparingQuery.paramConditionPairs) {
                 Object value = params.getValue(paramConditionPair.paramKey);
                 Class<? extends ValidationStrategy<?, Boolean>> validationStrategyClazz = paramConditionPair.validationStrategy;
+                if (params.getValidationStrategy(paramConditionPair.paramKey) != null) {
+                    validationStrategyClazz = params.getValidationStrategy(paramConditionPair.paramKey);
+                }
+                if (validationStrategyClazz == null) {
+                    validationStrategyClazz = settingsHolder().getDefaultValidationStrategy();
+                }
                 ValidationStrategy<Object, Boolean> validationStrategy = (ValidationStrategy<Object, Boolean>) ValidationUtil.instantiateClass(validationStrategyClazz);
                 if (validationStrategy.isAuto()) {
-                    validationStrategy = (ValidationStrategy<Object, Boolean>) ValidationUtil.instantiateClass(settingsHolder.getValidationRegistry().getValidationStrategy(value.getClass()));
+                    if (value == null) {
+                        validationStrategy = ValidationUtil.instantiateClass(NotNullValidationStrategy.class);
+                    } else {
+                        validationStrategy = (ValidationStrategy<Object, Boolean>) ValidationUtil.instantiateClass(settingsHolder.getValidationRegistry().getValidationStrategy(value.getClass()));
+                    }
                 }
-                if (!validationStrategy.apply(value)) {
-                    messages.append(paramConditionPair.paramKey + "'s value must be valid. [Value = " + value + "], [ValidationStrategy = " + validationStrategy + "]\n");
+                if (params.getValidationStrategy(paramConditionPair.paramKey) != null && !validationStrategy.apply(value)) {
+                    for (Object beanPropertyParameterObj : beanPropertyParameterObjs) {
+                        BeanWrapper bw = PropertyAccessorFactory.forBeanPropertyAccess(beanPropertyParameterObj);
+                        TypeDescriptor propertyTypeDescriptor = bw.getPropertyTypeDescriptor(paramConditionPair.paramKey);
+                        if (propertyTypeDescriptor.hasAnnotation(Validate.class)) {
+                            Validate annotation = propertyTypeDescriptor.getAnnotation(Validate.class);
+                            if (annotation.optional()) {
+                                notRequiredValidationProblem = true;
+                            } else {
+                                messages.append(paramConditionPair.paramKey + "'s value must be valid. [Value = " + value + "], [ValidationStrategy = " + validationStrategy + "]\n");
+                            }
+                        }
+                    }
+
+                } else if (params.getValidationStrategy(paramConditionPair.paramKey) == null && !validationStrategy.apply(value)) {
+                    notRequiredValidationProblem = true;
                 }
             }
-            sql.append(ValidationUtil.instantiateClass(settingsHolder.getDefaultSeparatorStrategy()).apply(preparingQuery.sqlPart));
+            if (!notRequiredValidationProblem) {
+                sql.append(ValidationUtil.instantiateClass(settingsHolder.getDefaultSeparatorStrategy()).apply(preparingQuery.sqlPart));
+            }
         }
         if (!messages.toString().isEmpty()) {
             throw new RuntimeException(messages.toString());
@@ -63,7 +100,7 @@ public abstract class AbstractFluentQuery implements FluentQuery {
     @Override
     public FluentQuery append(String sqlPart) {
         return append(sqlPart, parameterMap -> {
-        }, settingsHolder.getDefaultValidationStrategy());
+        }, null);
     }
 
     @Override
@@ -109,6 +146,8 @@ public abstract class AbstractFluentQuery implements FluentQuery {
         this.preparingQueries.addAll(((AbstractFluentQuery) query).preparingQueries);
         return this;
     }
+
+    public abstract List<Object[]> listAsTuple();
 
     public abstract int update();
 
