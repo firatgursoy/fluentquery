@@ -10,7 +10,7 @@ FluentQuery is a flexible SQL query builder which utilizes JAVA 8 Functional Int
 <dependency>
   <groupId>io.github.firatgursoy</groupId>
   <artifactId>fluentquery</artifactId>
-  <version>0.0.1</version>
+  <version>0.0.4</version>
 </dependency>
 ```
 
